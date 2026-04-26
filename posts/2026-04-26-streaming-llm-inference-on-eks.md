@@ -1,11 +1,11 @@
 ---
-title: "Streaming LLM inference on EKS, end to end"
+title: "Streaming LLM Inference on EKS, End to End"
 date: 2026-04-26
 ---
 
-# Streaming LLM inference on EKS, end to end
+# Streaming LLM Inference on EKS, End to End
 
-## 1. The claim
+## 1. The Claim
 
 Every token leaves the GPU and arrives at the client without a single intermediate layer holding it in a buffer.
 
@@ -42,7 +42,7 @@ flowchart LR
 
 The rest of this post is the why, layer by layer.
 
-## 2. Why streaming is the point
+## 2. Why Streaming Is the Point?
 
 The first token is what humans feel. A response that starts arriving in 200ms feels instant. The same response sitting silent for 8 seconds while the model churns through its full generation feels broken — even if the final output is identical. Time to first token (TTFT) is not a backend metric; it is the boundary between a tool that feels alive and one that feels like a batch job.
 
@@ -52,9 +52,9 @@ Both of these properties are fragile. Every layer in the request path has an opp
 
 That is the constraint: no layer is allowed to buffer. It sounds simple. In practice, it touched every component selection and every configuration decision in the build. Not as a post-hoc optimization pass, but as the organizing principle from the start. Section 3 walks through what it meant at each layer.
 
-## 3. The streaming path, layer by layer
+## 3. The Streaming Path, Layer by Layer
 
-### 3.1 vLLM workers
+### 3.1 vLLM Workers
 
 Each worker is a vLLM process serving Qwen2.5-7B over the OpenAI-compatible `/v1/chat/completions` endpoint. When `stream=true` arrives, vLLM emits server-sent events directly — no application-level buffering, no post-processing. The stream is born here.
 
@@ -80,7 +80,7 @@ vllmConfig:
 
 The image is pinned to `vllm/vllm-openai:v0.19.1`. Not `latest`. Not the chart's default `lmcache/vllm-openai`, which lags upstream by months and carries lmcache-specific patches irrelevant here. Pinning a digest would be stronger; a named tag is the practical tradeoff for a sandbox build. The point is that the chart default is wrong for this use case, and it is easy to miss.
 
-### 3.2 The router
+### 3.2 The Router
 
 The vLLM Production Stack chart ships a router component that sits between the gateway and the workers. Without it, a round-robin load balancer would scatter requests across workers at random. Prefix caching on the workers would still operate, but a request whose prompt prefix is hot on worker A might land on worker B and rebuild the KV cache from cold. The cache hit becomes a cache miss. The whole point of prefix caching is to steer repeat prefixes to the worker that already has them warm.
 
@@ -103,7 +103,7 @@ _source: `src/vllm_router/routers/routing_logic.py`_
 
 From the streaming perspective, the router is a transparent reverse proxy. It reads the request, picks a worker, and forwards the connection. The SSE response streams back through without modification. Nothing buffers; the router adds routing overhead but does not touch the response body.
 
-### 3.3 The FastAPI gateway — the streaming proxy
+### 3.3 The FastAPI Gateway — The Streaming Proxy
 
 The gateway is where most streaming pipes quietly break. The worker is producing tokens. The router is forwarding the stream. Then the gateway does something small — reads the upstream body into a buffer, or hands the response to a sync handler, or runs under gunicorn — and the client sees nothing until the full response is assembled. No error. No warning. Just a 10-second pause and then a wall of text.
 
@@ -151,7 +151,7 @@ Auth runs before the proxy. `require_bearer_token` is a FastAPI dependency on th
 
 Timeouts: `httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0)`. The `read` timeout is long — 600 seconds — because LLM generation can be slow for long outputs. The `connect` timeout is short — 10 seconds — so a dead or restarting router surfaces as a fast error rather than a silent hang. The asymmetry is intentional.
 
-### 3.4 NLB, not ALB
+### 3.4 NLB, Not ALB
 
 Public exposure is via an NLB, not an ALB. The distinction matters for streaming.
 
@@ -174,7 +174,7 @@ No AWS Load Balancer Controller installed — the in-tree CCM annotation is enou
 
 The NLB is the layer most likely to silently compromise a streaming claim. Most people reach for ALB by default — it is the canonical AWS load balancer choice. For SSE specifically, it is the wrong one, and the failure is quiet enough that it is easy to miss.
 
-### 3.5 The chain
+### 3.5 The Chain
 
 A streaming claim is a chain claim. The weakest link wins.
 
@@ -184,7 +184,7 @@ None of these was the default behavior of its layer. vLLM's default image is wro
 
 If any single one of these went the default way, the headline claim would be a lie.
 
-## 4. Proving it — what the dashboards show
+## 4. Proving It — What the Dashboards Show
 
 The metrics path is: vLLM workers expose Prometheus metrics; an in-cluster prometheus-agent scrapes them and remote-writes to AMP; Grafana queries AMP through a sigv4 datasource pinned to uid `amp`. The dashboards are version-controlled JSON in `infra/platform-apps/dashboards/`, baked into ConfigMaps, and loaded by Grafana on startup via a provisioning sidecar. There is no manual import step, no dashboard state that lives outside the repo.
 
@@ -206,7 +206,7 @@ A third dashboard, `gpu-health.json`, surfaces per-node GPU utilisation, memory,
 
 The 307 redirect. The gateway originally exposed its own Prometheus metrics by mounting `prometheus_client.make_asgi_app()` at `/metrics`. Starlette responded to `GET /metrics` with a 307 redirect to `/metrics/`. The scraper did not follow it. Every gateway metric was dropped silently — no error, no alert, no log line. The Grafana panels for the gateway simply showed no data. The fix in commit `519a60e` replaced the mount with a plain `@app.get("/metrics")` handler that calls `generate_latest()` directly and returns a `Response` with the correct content type. One redirect, zero data, a blank dashboard. The kind of failure that looks like a provisioning problem until it does not.
 
-## 5. The supporting cast
+## 5. The Supporting Cast
 
 Sections 1–4 cover the streaming spine. The decisions below sit adjacent to it — none of them appear in the token path, but each one reflects a concrete choice over a less-considered default.
 
@@ -216,19 +216,19 @@ Two components need AWS credentials in-cluster: Grafana to query AMP, and promet
 
 The practical difference: with IRSA, every IAM role's trust policy embeds the cluster's OIDC provider ARN. The role definition becomes cluster-specific. Rebuild or rename the cluster and the trust policies need updating across every role. With Pod Identity, the trust policy principal is `pods.eks.amazonaws.com` — no cluster ARN, no OIDC URL. The same role works on any EKS cluster without touching IAM. Pod Identity is the newer pattern (GA'd 2023) and the cleaner choice for any greenfield EKS work. IRSA remains common because most documentation still defaults to it; it is not the better option.
 
-### Managed observability — AMP, prometheus-agent, stateless Grafana
+### Managed Observability — AMP, prometheus-agent, Stateless Grafana
 
 The metrics pipeline runs three managed or near-stateless pieces. AMP (Amazon Managed Prometheus) stores the metrics — no Prometheus server to run, scale, back up, or migrate. An in-cluster `prometheus-agent` Helm release scrapes the vLLM workers and remote-writes to AMP; the agent mode means no local storage, no compaction, no retention to reason about. Grafana runs in-cluster but owns no state: dashboards are version-controlled JSON in `infra/platform-apps/dashboards/`, baked into ConfigMaps, and loaded at startup through a provisioning sidecar. No persistent volume. No in-cluster Prometheus. If the Grafana pod dies, the replacement comes up identical — there is no state to recover.
 
 The stack originally used AMP's managed agentless scraper. Its startup and reload times were long enough to make every scrape-config tweak slow, which is a tax that compounds quickly when iterating on a demo like this. The self-hosted prometheus-agent restored a fast inner loop with the same managed storage layer underneath. Every piece of persistent state that could be pushed out of the cluster was.
 
-### Two-phase Terraform deploy with content-hash image tags
+### Two-Phase Terraform Deploy with Content-Hash Image Tags
 
 The gateway Helm release references an ECR image, which means ECR must exist before the image can be pushed and before the release can be applied. A single-phase `terraform apply` hits a dependency cycle: the image push needs the repo URL, the Helm release needs the image tag, and none of it can resolve until ECR is up. The fix is two phases inside `infra/platform-apps`: `terraform apply -target=aws_ecr_repository.fastapi` creates the repo first, then a full `terraform apply` builds the image and brings up everything else.
 
 The image tag is a 12-character SHA-256 prefix computed in `gateway.tf` from `filesha256` across every file the Dockerfile copies in — `Dockerfile`, `pyproject.toml`, `uv.lock`, and `app/**`. The tag is deterministic from source content. Change a source file and the tag changes; Terraform rebuilds and repushes. Change nothing and the tag is identical; Terraform no-ops the provisioner. No `latest` tag, no manual version bumps, no rebuild-on-every-apply.
 
-### Scale-to-zero in one Terraform variable
+### Scale-to-Zero in One Terraform Variable
 
 One variable — `gpu_desired_size` in `infra/eks-foundation/variables.tf`, range 0–2 — controls GPU node capacity in the managed node group. `terraform apply -var gpu_desired_size=0` drains the GPU nodes. Everything else stays up: control plane, networking stack, AMP workspace, ECR images, Grafana dashboards, observability pipeline. `terraform apply -var gpu_desired_size=2` brings them back; add node-ready time and model load and the stack is serving in roughly five minutes.
 
