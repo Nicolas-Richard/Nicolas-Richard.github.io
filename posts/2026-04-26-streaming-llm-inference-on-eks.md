@@ -3,6 +3,16 @@ title: "Streaming LLM Inference on EKS, End to End"
 date: 2026-04-26
 ---
 
+TL;DR
+
+This is an end-to-end walkthrough of self-hosting LLM inference on EKS — vLLM workers behind a FastAPI streaming gateway, Terraform from cluster up to dashboards. 🚀 ✅
+
+What’s in the repo and writeup: 
+- EKS foundation (CPU + GPU node groups) provisioned as code
+- vLLM serving Qwen2.5-7B-Instruct, SSE-streamed through a FastAPI gateway with bearer auth
+- Prometheus + Grafana + DCGM exporter — live GPU health, TTFT, and inference latency dashboards
+- Real TTFT and throughput numbers from the deployment, and where the bottlenecks showed up
+
 # Streaming LLM Inference on EKS, End to End
 
 ## 1. The Claim
@@ -42,13 +52,13 @@ flowchart LR
 
 The rest of this post is the why, layer by layer.
 
-## 2. Why Streaming Is the Point?
+## 2. Why Is Streaming the Point?
 
-The first token is what humans feel. A response that starts arriving in 200ms feels instant. The same response sitting silent for 8 seconds while the model churns through its full generation feels broken — even if the final output is identical. Time to first token (TTFT) is not a backend metric; it is the boundary between a tool that feels alive and one that feels like a batch job.
+A response that starts arriving in 200ms feels instant. The same response sitting silent for 8 seconds while the model churns through its full generation feels broken — even if the final output is identical. Time to first token (TTFT) is not a backend metric; it is the boundary between a tool that feels alive and one that feels like a background job.
 
-Once tokens start arriving, cadence takes over. Streaming is not just about getting the first token out fast. It is about sustaining a rhythm. A steady flow reads naturally; the eye and the brain process it in real time, following the text as if someone is typing. Irregular delivery breaks that. Tokens that arrive in bursts — a gap, then a flood — disrupt reading the same way a speaker who pauses mid-sentence does. The inter-token latency does not have to be zero, but it has to be consistent. Smoothness matters more than raw speed.
+Once tokens start arriving, Time per output token (TPOT) takes over. Streaming is not just about getting the first token out fast. It is about sustaining a rhythm. A steady flow reads naturally; the eye and the brain process it in real time, following the text as if someone is typing. Irregular delivery breaks that. Tokens that arrive in bursts — a gap, then a flood — disrupt reading the same way a speaker who pauses mid-sentence does. The inter-token latency does not have to be zero, but it has to be consistent. Smoothness matters more than raw speed.
 
-Both of these properties are fragile. Every layer in the request path has an opportunity to destroy them. Most layers buffer by default. A prefork web server holds a full response body before writing it out. A load balancer accumulating HTTP/1.1 chunks before forwarding. A streaming handler that reads the upstream body into memory before yielding. Each one adds its own delay before the first token escapes and introduces its own jitter into the cadence. The stack is only as streaming as its most-buffering layer. One wrong default anywhere and TTFT climbs; the cadence goes lumpy.
+Both TTFT and TPOT are fragile and every layer in the request path has an opportunity to destroy them. Most layers buffer by default, for example: A prefork web server holds a full response body before writing it out; A load balancer accumulating HTTP/1.1 chunks before forwarding; A streaming handler that reads the upstream body into memory before yielding. Each one adds its own delay before the first token escapes and introduces its own jitter into the cadence. The stack is only as efficient as its most-buffering layer. One wrong default anywhere and TTFT climbs;
 
 That is the constraint: no layer is allowed to buffer. It sounds simple. In practice, it touched every component selection and every configuration decision in the build. Not as a post-hoc optimization pass, but as the organizing principle from the start. Section 3 walks through what it meant at each layer.
 
@@ -56,7 +66,7 @@ That is the constraint: no layer is allowed to buffer. It sounds simple. In prac
 
 ### 3.1 vLLM Workers
 
-Each worker is a vLLM process serving Qwen2.5-7B over the OpenAI-compatible `/v1/chat/completions` endpoint. When `stream=true` arrives, vLLM emits server-sent events directly — no application-level buffering, no post-processing. The stream is born here.
+Each worker is a vLLM process serving Qwen2.5-7B over the OpenAI-compatible `/v1/chat/completions` endpoint. When `stream=true` arrives, vLLM emits server-sent events directly — no application-level buffering, no post-processing. The stream begins here.
 
 The deployment runs two replicas. Each g6.2xlarge node has exactly one NVIDIA L4 GPU, and pod anti-affinity on `kubernetes.io/hostname` with `requiredDuringSchedulingIgnoredDuringExecution` makes co-location impossible — Kubernetes cannot schedule both replicas on the same node even under pressure. The result is deterministic: one worker per GPU, always.
 
@@ -105,9 +115,9 @@ From the streaming perspective, the router is a transparent reverse proxy. It re
 
 ### 3.3 The FastAPI Gateway — The Streaming Proxy
 
-The gateway is where most streaming pipes quietly break. The worker is producing tokens. The router is forwarding the stream. Then the gateway does something small — reads the upstream body into a buffer, or hands the response to a sync handler, or runs under gunicorn — and the client sees nothing until the full response is assembled. No error. No warning. Just a 10-second pause and then a wall of text.
+The gateway is where most streaming pipes quietly break. The worker is producing tokens. The router is forwarding the stream. Then the gateway does something small (reads the upstream body into a buffer, or hands the response to a sync handler, or runs under gunicorn) and the client sees nothing until the full response is assembled. No error. No warning. Just a 10-second pause and then a wall of text.
 
-The gateway's job is to be transparent: validate the bearer token, open a connection to the router, and re-yield bytes as they arrive. Three primitives do the actual streaming work.
+The gateway's job is to be transparent: validate the bearer token, open a connection to the router, and re-yield bytes as they arrive. Three primitives do the actual streaming work:
 
 `httpx.AsyncClient.send(..., stream=True)` opens the upstream connection without reading the response body. The `stream=True` flag is the critical detail — without it, httpx blocks until the full body is received before returning. With it, the connection is open and the body is unread.
 
@@ -143,7 +153,7 @@ async def proxy_to_router(request: Request, path: str) -> StreamingResponse:
     )
 ```
 
-Two response headers are set explicitly. `Cache-Control: no-cache` tells any caching layer not to hold the response body. `X-Accel-Buffering: no` targets NGINX and NGINX-style ingress controllers, which buffer SSE responses by default — accumulating chunks until a flush threshold before forwarding. Both headers are cheap to set and cheap to skip; skipping them occasionally produces a confusing failure mode where streaming works in development and silently degrades behind an ingress.
+Two response headers are set explicitly. `Cache-Control: no-cache` tells any caching layer not to hold the response body. `X-Accel-Buffering: no` targets NGINX and NGINX-style ingress controllers, which buffer SSE responses by default — accumulating chunks until a flush threshold before forwarding.
 
 The server is uvicorn, not gunicorn. Gunicorn is the conventional production default for Python web apps, but its prefork worker model reads complete response bodies before flushing to the OS. For SSE that means every token waits for generation to finish. Uvicorn handles ASGI directly — no worker boundary, no in-process buffer. Chunks flow as fast as the upstream produces them.
 
@@ -155,7 +165,7 @@ Timeouts: `httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0)`. The 
 
 Public exposure is via an NLB, not an ALB. The distinction matters for streaming.
 
-ALB operates at L7. It parses HTTP, applies its own chunking logic, and has buffering defaults. SSE survives an ALB — technically the events get through — but the ALB can re-chunk them, and the delivery loses cadence. The client sees bursts rather than a steady flow. No error, no flag, just lumpy output.
+ALB operates at L7. It parses HTTP, applies its own chunking logic, and has buffering defaults. SSE survives an ALB — technically the events get through — but the ALB can re-chunk them, and the delivery would lose its cadence.
 
 NLB operates at L4: TCP in, TCP out. It does not parse the response body. It cannot buffer what it does not look at. That is exactly what a streaming proxy needs at the edge.
 
@@ -176,13 +186,11 @@ The NLB is the layer most likely to silently compromise a streaming claim. Most 
 
 ### 3.5 The Chain
 
-A streaming claim is a chain claim. The weakest link wins.
-
 The chain here has four links. vLLM workers: origin of the SSE stream, no pre-rolling, tokens emitted as they are generated. The Production Stack router: a transparent reverse proxy that picks a worker and forwards the connection without touching the response body. The FastAPI gateway: `httpx` async stream, `aiter_raw`, `StreamingResponse`, uvicorn instead of gunicorn, `Cache-Control` and `X-Accel-Buffering` headers set explicitly. The NLB: L4, TCP in and TCP out, cannot buffer what it does not parse.
 
 None of these was the default behavior of its layer. vLLM's default image is wrong for this use case. The router's prefix-aware mode is undocumented. The gateway requires three specific primitives and the right server. The NLB requires overriding the conventional ALB choice.
 
-If any single one of these went the default way, the headline claim would be a lie.
+If any single one of these went the default way, the headline's promise would be broken.
 
 ## 4. Proving It — What the Dashboards Show
 
@@ -190,13 +198,13 @@ The metrics path is: vLLM workers expose Prometheus metrics; an in-cluster prome
 
 Two dashboards cover the stack.
 
-**`inference-latency.json`** — six panels: TTFT p50, TTFT p95, Inter-token latency p95, End-to-end latency p95, Throughput (req/s), Throughput (tok/s). This dashboard is the direct proof of the streaming claim. Section 2 named TTFT and inter-token latency as the two properties humans actually perceive in a streaming response. Those are exactly the metrics in the top half of this dashboard. If TTFT p95 is low and inter-token latency p95 is stable, the chain is doing its job. If either climbs, something in the path is buffering or stalling, and the dashboard surfaces it immediately.
+**`inference-latency.json`** — six panels: TTFT p50, TTFT p95, Inter-token latency p95, End-to-end latency p95, Throughput (req/s), Throughput (tok/s).
 
 ![Inference latency dashboard — TTFT p50/p95, inter-token latency, throughput](/assets/grafana-vllm-inference-latency.png)
 
 Under the sandbox load shown above, TTFT p50 sits at ~70 ms and p95 around ~150 ms — comfortably under the 200 ms threshold that makes a response feel instant. The inter-token and throughput panels reflect single-stream traffic and are not a stress benchmark; a controlled-concurrency benchmark is the subject of the follow-up post.
 
-**`worker-comparison.json`** — five panels, all per-worker: Per-worker request rate, Per-worker TTFT p95, KV-cache utilisation per worker, Prefix-cache hit rate per worker, Queue depth per worker. This dashboard confirms that both workers are actually receiving traffic, and that the KV and prefix caches are live and being measured. Demonstrating that prefix-aware routing is doing useful work — repeated-prefix workloads showing one worker cache-hot and the other cold — requires a dedicated load pattern and is the subject of a follow-up post. This dashboard establishes that the data is wired up correctly.
+**`worker-comparison.json`** — five panels, all per-worker: Per-worker request rate, Per-worker TTFT p95, KV-cache utilisation per worker, Prefix-cache hit rate per worker, Queue depth per worker. This dashboard confirms that both workers are actually receiving traffic, and that the KV and prefix caches are live and being measured. Demonstrating that prefix-aware routing is doing useful work — repeated-prefix workloads showing one worker cache-hot and the other cold — requires a dedicated load pattern and is the subject of a follow-up post.
 
 ![Worker comparison dashboard — per-worker request rate, KV-cache utilisation, prefix-cache hit rate](/assets/grafana-vllm-worker-comparison.png)
 
@@ -204,11 +212,11 @@ A third dashboard, `gpu-health.json`, surfaces per-node GPU utilisation, memory,
 
 ![GPU health dashboard — per-node utilisation, memory, temperature, and power draw](/assets/grafana-vllm-GPU-health.png)
 
-The 307 redirect. The gateway originally exposed its own Prometheus metrics by mounting `prometheus_client.make_asgi_app()` at `/metrics`. Starlette responded to `GET /metrics` with a 307 redirect to `/metrics/`. The scraper did not follow it. Every gateway metric was dropped silently — no error, no alert, no log line. The Grafana panels for the gateway simply showed no data. The fix in commit `519a60e` replaced the mount with a plain `@app.get("/metrics")` handler that calls `generate_latest()` directly and returns a `Response` with the correct content type. One redirect, zero data, a blank dashboard. The kind of failure that looks like a provisioning problem until it does not.
+The 307 redirect. The gateway originally exposed its own Prometheus metrics by mounting `prometheus_client.make_asgi_app()` at `/metrics`. Starlette responded to `GET /metrics` with a 307 redirect to `/metrics/`. The scraper did not follow it. Every gateway metric was dropped silently — no error, no alert, no log line. The Grafana panels for the gateway simply showed no data. The fix in commit `519a60e` replaced the mount with a plain `@app.get("/metrics")` handler that calls `generate_latest()` directly and returns a `Response` with the correct content type.
 
 ## 5. The Supporting Cast
 
-Sections 1–4 cover the streaming spine. The decisions below sit adjacent to it — none of them appear in the token path, but each one reflects a concrete choice over a less-considered default.
+Sections 1–4 cover the streaming pipeline. The decisions below sit adjacent to it — none of them appear in the token path, but each one reflects a concrete choice over a less-considered default.
 
 ### Pod Identity over IRSA
 
@@ -236,7 +244,7 @@ This is a sandbox. GPU instances are the dominant cost. With `gpu_desired_size=0
 
 ## 6. Wrap
 
-The full stack is in `https://github.com/Nicolas-Richard/vllm-on-eks`. `make deploy` brings it up: a targeted `terraform apply` for ECR first to break the image-push dependency cycle, then a full apply for everything else. The repo includes the Grafana dashboards, the gateway source, and the Helm values; any AWS account in an EKS-eligible region with a g6.2xlarge quota can reproduce the full stack from scratch. Scale-to-zero via `gpu_desired_size=0` keeps the idle cost manageable between sessions.
+The full stack is in `https://github.com/Nicolas-Richard/vllm-on-eks`. `make deploy` brings it up: a targeted `terraform apply` for ECR first to break the image-push dependency cycle, then a full apply for everything else. The repo includes the Grafana dashboards, the gateway source, and the Helm values; any AWS account in an EKS-eligible region with a g6.2xlarge quota can reproduce the full stack from scratch.
 
 The follow-up post will cover benchmarking and a prefix-aware-routing demonstration on this same stack.
 
