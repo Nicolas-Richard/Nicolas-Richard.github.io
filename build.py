@@ -32,6 +32,10 @@ PAGE = """\
 <main>
 {content}
 </main>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({{ startOnLoad: true }});
+</script>
 </body>
 </html>"""
 
@@ -73,9 +77,20 @@ def build():
         reverse=True,
     )
 
+    # Copy assets
+    if Path("assets").exists():
+        shutil.copytree("assets", SITE_DIR / "assets", dirs_exist_ok=True)
+
     # Post pages
     for post in posts:
         body_html = markdown.markdown(post["body"], extensions=["fenced_code", "tables"])
+        # Let Mermaid JS render diagrams client-side
+        body_html = re.sub(
+            r'<pre><code class="language-mermaid">(.*?)</code></pre>',
+            r'<pre class="mermaid">\1</pre>',
+            body_html,
+            flags=re.DOTALL,
+        )
         content = f"""\
 <article>
   <h1>{post["title"]}</h1>
