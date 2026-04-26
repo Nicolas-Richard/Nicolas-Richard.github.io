@@ -63,7 +63,7 @@ def parse_post(path):
 
 
 def fmt_date(d):
-    return d.strftime("%B %-d, %Y")
+    return d.strftime("%d/%m/%Y")
 
 
 def build():
