@@ -5,6 +5,8 @@ date: 2026-04-26
 
 Every token leaves the GPU and arrives at the client without a single intermediate layer holding it in a buffer.
 
+![Streaming inference over `curl -N` against the public gateway — tokens arriving in real time, no buffering](/assets/inference-streaming.gif)
+
 This is a self-hosted LLM serving stack on EKS. Two vLLM workers serve Qwen2.5-7B in bfloat16 on g6.2xlarge nodes, one model replica per GPU. A vLLM Production Stack router sits in front and makes prefix-aware routing decisions, steering repeated prompt prefixes to the same worker so the KV cache is warm. A FastAPI gateway handles auth and proxies the token stream to the network. A public Network Load Balancer takes it from there to the client. Five components; the constraint on each was the same: do not buffer.
 
 ```mermaid
@@ -32,6 +34,8 @@ flowchart LR
 - **vLLM Production Stack router (prefix-aware)** — routes each request to the worker most likely to have the prompt's KV prefix cached.
 - **vLLM workers A and B (Qwen2.5-7B BF16, 1× L4 each)** — generate tokens and stream them over the OpenAI-compatible `/v1/chat/completions` endpoint with `stream=true`.
 
+![EKS workloads — fastapi-gateway, grafana, prometheus-agent, router, and two vLLM workers all healthy in the AWS console](/assets/aws-eks-deployments.png)
+
 The rest of this post is the why, layer by layer.
 
 ## 1. Why streaming is the point
@@ -51,6 +55,8 @@ That is the constraint: no layer is allowed to buffer. It sounds simple. In prac
 Each worker is a vLLM process serving Qwen2.5-7B over the OpenAI-compatible `/v1/chat/completions` endpoint. When `stream=true` arrives, vLLM emits server-sent events directly — no application-level buffering, no post-processing. The stream is born here.
 
 The deployment runs two replicas. Each g6.2xlarge node has exactly one NVIDIA L4 GPU, and pod anti-affinity on `kubernetes.io/hostname` with `requiredDuringSchedulingIgnoredDuringExecution` makes co-location impossible — Kubernetes cannot schedule both replicas on the same node even under pressure. The result is deterministic: one worker per GPU, always.
+
+![EKS Compute tab — two g6.2xlarge GPU nodes plus a t3.large supporting node, in two node groups](/assets/aws-eks-node-groups.png)
 
 Three `vllmConfig` settings matter:
 
@@ -158,7 +164,15 @@ Two dashboards cover the stack.
 
 **`inference-latency.json`** — TTFT p50, TTFT p95, Inter-token latency p95, End-to-end latency p95, Throughput (req/s), Throughput (tok/s). This is the direct proof of the streaming claim. If TTFT p95 is low and inter-token latency p95 is stable, the chain is doing its job.
 
+![Inference latency dashboard — TTFT p50/p95, inter-token latency, throughput](/assets/grafana-vllm-inference-latency.png)
+
 **`worker-comparison.json`** — per-worker request rate, TTFT p95, KV-cache utilisation, prefix-cache hit rate, queue depth. This confirms both workers are receiving traffic and that the KV and prefix caches are live.
+
+![Worker comparison dashboard — per-worker request rate, KV-cache utilisation, prefix-cache hit rate](/assets/grafana-vllm-worker-comparison.png)
+
+A third dashboard, `gpu-health.json`, surfaces per-node GPU utilisation, memory, temperature, and power draw via the DCGM exporter.
+
+![GPU health dashboard — per-node utilisation, memory, temperature, and power draw](/assets/grafana-vllm-GPU-health.png)
 
 The 307 redirect. The gateway originally exposed its Prometheus metrics by mounting `prometheus_client.make_asgi_app()` at `/metrics`. Starlette responded to `GET /metrics` with a 307 redirect to `/metrics/`. The scraper did not follow it. Every gateway metric was dropped silently — no error, no alert, no log line. The fix replaced the mount with a plain `@app.get("/metrics")` handler. One redirect, zero data, a blank dashboard. The kind of failure that looks like a provisioning problem until it does not.
 
