@@ -83,7 +83,8 @@ def build():
 
     # Post pages
     for post in posts:
-        body_html = markdown.markdown(post["body"], extensions=["fenced_code", "tables"])
+        body = re.sub(r'^#[^#].*\n', '', post["body"], count=1)
+        body_html = markdown.markdown(body, extensions=["fenced_code", "tables"])
         # Let Mermaid JS render diagrams client-side
         body_html = re.sub(
             r'<pre><code class="language-mermaid">(.*?)</code></pre>',
