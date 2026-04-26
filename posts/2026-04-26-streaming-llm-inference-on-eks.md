@@ -194,6 +194,8 @@ Two dashboards cover the stack.
 
 ![Inference latency dashboard — TTFT p50/p95, inter-token latency, throughput](/assets/grafana-vllm-inference-latency.png)
 
+Under the sandbox load shown above, TTFT p50 sits at ~70 ms and p95 around ~150 ms — comfortably under the 200 ms threshold that makes a response feel instant. The inter-token and throughput panels reflect single-stream traffic and are not a stress benchmark; a controlled-concurrency benchmark is the subject of the follow-up post.
+
 **`worker-comparison.json`** — five panels, all per-worker: Per-worker request rate, Per-worker TTFT p95, KV-cache utilisation per worker, Prefix-cache hit rate per worker, Queue depth per worker. This dashboard confirms that both workers are actually receiving traffic, and that the KV and prefix caches are live and being measured. Demonstrating that prefix-aware routing is doing useful work — repeated-prefix workloads showing one worker cache-hot and the other cold — requires a dedicated load pattern and is the subject of a follow-up post. This dashboard establishes that the data is wired up correctly.
 
 ![Worker comparison dashboard — per-worker request rate, KV-cache utilisation, prefix-cache hit rate](/assets/grafana-vllm-worker-comparison.png)
