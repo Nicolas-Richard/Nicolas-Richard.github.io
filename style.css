@@ -8,6 +8,7 @@ body {
   max-width: 832px;
   margin: 60px auto;
   padding: 0 20px;
+  overflow-x: hidden;
 }
 
 a { color: #333; }
