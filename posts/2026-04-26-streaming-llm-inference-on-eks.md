@@ -7,7 +7,8 @@ TL;DR
 
 This is an end-to-end walkthrough of self-hosting LLM inference on EKS — vLLM workers behind a FastAPI streaming gateway, Terraform from cluster up to dashboards. 🚀 ✅
 
-What’s in the repo and writeup: 
+What’s in the repo and writeup:
+
 - EKS foundation (CPU + GPU node groups) provisioned as code
 - vLLM serving Qwen2.5-7B-Instruct, SSE-streamed through a FastAPI gateway with bearer auth
 - Prometheus + Grafana + DCGM exporter — live GPU health, TTFT, and inference latency dashboards
