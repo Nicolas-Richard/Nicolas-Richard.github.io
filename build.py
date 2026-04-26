@@ -1,4 +1,3 @@
-import hashlib
 import re
 import shutil
 from pathlib import Path
@@ -26,7 +25,7 @@ PAGE = """\
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title}</title>
-  <link rel="stylesheet" href="{css_url}">
+  <link rel="stylesheet" href="{css_path}style.css">
 </head>
 <body>
 {header}
@@ -71,8 +70,6 @@ def build():
     SITE_DIR.mkdir(exist_ok=True)
     (SITE_DIR / "posts").mkdir(exist_ok=True)
     shutil.copy("style.css", SITE_DIR / "style.css")
-    css_hash = hashlib.md5(Path("style.css").read_bytes()).hexdigest()[:8]
-    css_url = f"/style.css?v={css_hash}"
 
     posts = sorted(
         [parse_post(p) for p in POSTS_DIR.glob("*.md")],
@@ -102,7 +99,7 @@ def build():
 </article>"""
         html = PAGE.format(
             title=f'{post["title"]} — Nicolas Richard',
-            css_url=css_url,
+            css_path="/",
             header=HEADER,
             content=content,
         )
