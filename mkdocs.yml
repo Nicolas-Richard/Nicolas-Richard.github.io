@@ -1,16 +1,28 @@
-site_name: "Nicolas Richard's Engineering Blog"
+site_name: Nicolas Richard
 site_url: https://nicolas-richard.github.io
 
 theme:
   name: material
   palette:
     scheme: default
-    primary: indigo
+    primary: white
+    accent: black
+  font:
+    text: false
+    code: false
+  features:
+    - navigation.instant
+
+extra:
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css
 
 plugins:
   - search
-  - blog
+  - blog:
+      blog_dir: blog
 
 nav:
-  - Home: index.md
   - Blog: blog/index.md
