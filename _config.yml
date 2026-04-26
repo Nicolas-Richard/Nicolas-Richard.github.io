@@ -1,0 +1,7 @@
+title: "Nicolas Richard's Engineering Blog"
+description: "Thoughts on software engineering"
+theme: minima
+url: "https://nicolas-richard.github.io"
+
+plugins:
+  - jekyll-feed
