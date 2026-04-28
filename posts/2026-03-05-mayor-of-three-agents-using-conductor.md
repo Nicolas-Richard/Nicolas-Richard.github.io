@@ -1,5 +1,5 @@
 ---
-title: "Mayor of Three Agents"
+title: "Mayor of Three Agents using Conductor"
 date: 2026-03-05
 ---
 
