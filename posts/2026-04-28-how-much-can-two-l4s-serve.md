@@ -51,7 +51,14 @@ The harness — a thin bash wrapper that handles run-tagging, target-concurrency
 
 ## What the sweep doesn’t tell you
 
-My first measurement was a concurrency sweep — the canonical way to characterize a serving system. C ∈ {1, 2, 4, 8, 16, 32, 64, 128}, ~1 minute per step, fixed prompt count per step.
+My first measurement was a concurrency sweep — the canonical way to characterize a serving system. C ∈ {1, 2, 4, 8, 16, 32, 64, 128}, ~1 minute per step, fixed prompt count per step. 
+
+   | C | req/s | output tok/s | p95 TTFT | p95 TPOT | p95 ITL |
+   |---|-------|--------------|----------|----------|---------|
+   | 4 | 0.74 | 65 | 182 ms | 59 ms | 59 ms |
+   | 16 | 2.55 | 233 | 222 ms | 61 ms | 67 ms |
+   | 64 | 7.66 | 725 | 1,567 ms | 79 ms | 97 ms |
+   | 128 | 11.06 | 1,065 | 2,731 ms | 125 ms | 168 ms |
 
 That sweep said C=128 had p95 TTFT of **2,731 ms** with the cache-friendly workload.
 
