@@ -7,6 +7,8 @@ date: 2026-03-05
 
 *Four hours as the lead engineer over a fleet of AI coding agents — and what actually broke.*
 
+Repo: [github.com/Nicolas-Richard/uptime](https://github.com/Nicolas-Richard/uptime)
+
 I spent four hours orchestrating AI coding agents into shipping a multi-tenant uptime monitoring SaaS. I didn't write the code. I didn't write the plans either. What I did: brainstormed designs with a planning agent, answered its tradeoff questions, reviewed every diff, ran the smoke tests, resolved merge conflicts, and recreated worktrees each time the base branch moved between waves.
 
 I drove the planning agent with Jesse Vincent's [obra/superpowers](https://github.com/obra/superpowers) skill pack. Its `brainstorming → writing-plans → executing-plans` flow produces specs and plans structured enough to hand to a worker agent without a babysitter — and that turned out to matter more than the orchestration glue. The skills feed sub-agents perfectly.
