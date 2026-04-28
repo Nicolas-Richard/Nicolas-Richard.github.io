@@ -5,6 +5,8 @@ date: 2026-04-28
 
 # How much can two L4s serve? It depends on the prompt.
 
+Repo: [github.com/Nicolas-Richard/vllm-on-eks](https://github.com/Nicolas-Richard/vllm-on-eks)
+
 *Follow-up to [Streaming LLM inference on EKS](https://nicolas-richard.github.io/posts/streaming-llm-inference-on-eks.html). The first post covered the build — Terraform, EKS, vLLM Production Stack, the streaming gateway. This one covers the obvious next question: now that it works, how much can it actually serve?*
 
 ## A simple question with two answers

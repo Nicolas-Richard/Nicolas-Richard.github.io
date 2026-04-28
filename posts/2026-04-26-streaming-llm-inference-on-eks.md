@@ -3,6 +3,8 @@ title: "Streaming LLM Inference on EKS, End to End"
 date: 2026-04-26
 ---
 
+Repo: [github.com/Nicolas-Richard/vllm-on-eks](https://github.com/Nicolas-Richard/vllm-on-eks)
+
 TL;DR
 
 This is an end-to-end walkthrough of self-hosting LLM inference on EKS — vLLM workers behind a FastAPI streaming gateway, Terraform from cluster up to dashboards. 🚀 ✅
