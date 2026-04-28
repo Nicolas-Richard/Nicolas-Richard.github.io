@@ -49,7 +49,7 @@ And two run shapes:
 
 The harness — a thin bash wrapper that handles run-tagging, target-concurrency warmup before each measured run, and a timestamped manifest for Grafana correlation — is in the public repo.
 
-## The trap I almost fell into
+## What the sweep doesn’t tell you
 
 My first measurement was a concurrency sweep — the canonical way to characterize a serving system. C ∈ {1, 2, 4, 8, 16, 32, 64, 128}, ~1 minute per step, fixed prompt count per step.
 
