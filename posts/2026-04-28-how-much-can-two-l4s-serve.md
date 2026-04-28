@@ -96,6 +96,3 @@ The second is the cancellation-chain bug I noticed while running the sweeps: whe
 
 Both are blog-post-shaped on their own. For now, this one ships.
 
----
-
-*Source data: run-tags `20260428-014129-brrrr-prefix-c128` and `20260428-020142-brrrr-random-c128`. The benchmarking harness is a thin wrapper around `vllm bench serve` with inter-step sleeps for clean Grafana windows and warmup-at-target concurrency. Reproducible from the public repo.*
