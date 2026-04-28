@@ -1,5 +1,5 @@
 ---
-title: "How Much Can Two L4s Serve? It Depends on the Prompt."
+title: "How Much Can Two Nvidia L4s Serve? It Depends on the Prompt."
 date: 2026-04-28
 ---
 
