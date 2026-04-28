@@ -88,7 +88,7 @@ At C=128, either workload keeps the GPUs continuously busy. The difference is wh
 
 ## Where this goes next
 
-Two open threads I haven't run yet:
+Two open threads I haven't pulled on yet:
 
 The first is comparing prefix-aware routing against round-robin routing on the *same* cache-friendly workload. Right now I've shown that *prefix caching* helps. To prove the *router specifically* earns its keep — versus relying on the workers' own caches with naive routing — I need an A/B with `routingLogic=roundrobin`. With round-robin, each prefix's cache state would be split across both workers, and each worker's hit rate should drop roughly in half. That's a single Helm value flip on the cluster.
 
