@@ -85,6 +85,23 @@ def build():
     if Path("assets").exists():
         shutil.copytree("assets", SITE_DIR / "assets", dirs_exist_ok=True)
 
+    # Build series index: series -> posts ordered oldest first
+    series_map = {}
+    for p in sorted(posts, key=lambda p: p["date"]):
+        if p["series"]:
+            series_map.setdefault(p["series"], []).append(p)
+
+    def post_nav(post):
+        if not post["series"]:
+            return ""
+        siblings = series_map[post["series"]]
+        idx = next(i for i, p in enumerate(siblings) if p["slug"] == post["slug"])
+        prev = siblings[idx - 1] if idx > 0 else None
+        nxt  = siblings[idx + 1] if idx < len(siblings) - 1 else None
+        left  = f'<a href="/posts/{prev["slug"]}.html">← {prev["title"]}</a>' if prev else '<span></span>'
+        right = f'<a href="/posts/{nxt["slug"]}.html">{nxt["title"]} →</a>' if nxt else '<span></span>'
+        return f'<nav class="post-nav">{left}{right}</nav>'
+
     # Post pages
     for post in posts:
         body = re.sub(r'^#[^#].*\n', '', post["body"], count=1)
@@ -96,11 +113,14 @@ def build():
             body_html,
             flags=re.DOTALL,
         )
+        nav = post_nav(post)
         content = f"""\
 <article>
+  {nav}
   <h1>{post["title"]}</h1>
   <time>{fmt_date(post["date"])}</time>
   <div class="content">{body_html}</div>
+  {nav}
 </article>"""
         html = PAGE.format(
             title=f'{post["title"]} — Nicolas Richard',

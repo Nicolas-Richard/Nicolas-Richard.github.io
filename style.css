@@ -82,6 +82,23 @@ nav a:hover { color: #333; }
   white-space: nowrap;
 }
 
+/* Prev/next series navigation */
+.post-nav {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  margin: 24px 0;
+  color: #999;
+}
+
+.post-nav a {
+  color: #0969da;
+  text-decoration: none;
+  max-width: 45%;
+}
+
+.post-nav a:hover { text-decoration: underline; }
+
 /* Post page */
 article h1 { margin-bottom: 4px; }
 
