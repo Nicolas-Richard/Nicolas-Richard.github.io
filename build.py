@@ -62,6 +62,7 @@ def parse_post(path):
         "title": meta.get("title", slug.replace("-", " ").title()),
         "date": date,
         "series": meta.get("series"),
+        "tag": meta.get("tag"),
         "body": body.strip(),
     }
 
@@ -132,8 +133,9 @@ def build():
 
     # Index
     def series_tag(p):
-        if p["series"]:
-            return f'<span class="series-tag">{p["series"]}</span>'
+        label = p["series"] or p["tag"]
+        if label:
+            return f'<span class="series-tag">{label}</span>'
         return ""
 
     items = "\n".join(

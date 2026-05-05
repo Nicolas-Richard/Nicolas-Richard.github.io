@@ -1,7 +1,7 @@
 ---
 title: "How We Upgraded Our Core Database with Just 5 Minutes of Downtime"
 date: 2025-01-01
-series: "Chime"
+tag: "Chime"
 ---
 
 This post was originally published on the Chime engineering blog.

@@ -1,7 +1,7 @@
 ---
 title: "How We Preview Kubernetes Changes at Chime"
 date: 2023-12-01
-series: "Chime"
+tag: "Chime"
 ---
 
 This post was originally published on the Chime engineering blog.
