@@ -1,3 +1,8 @@
+---
+title: "Adaptive Concurrency on a Multi-Tenant vLLM Gateway: WFQ + AIMD Against a TTFT SLO"
+date: 2026-05-04
+---
+
 # Adaptive concurrency on a multi-tenant vLLM gateway: WFQ + AIMD against a TTFT SLO
 
 *Fourth post in a series on running vLLM on EKS. The [first](https://nicolas-richard.github.io/posts/streaming-llm-inference-on-eks.html) covered the build. The [second](https://nicolas-richard.github.io/posts/how-much-can-two-l4s-serve.html) covered capacity. The [third](https://nicolas-richard.github.io/posts/per-tenant-concurrency-caps.html) put a per-tenant concurrency cap in front of vLLM so a bursty tenant couldn't ruin latency for everyone else. This one replaces those static caps with two stacked control mechanisms: weighted fair queueing on top of a global budget, and a controller that continuously tunes the budget against an SLO.*
