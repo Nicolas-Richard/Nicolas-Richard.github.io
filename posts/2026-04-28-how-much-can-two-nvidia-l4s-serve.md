@@ -106,7 +106,3 @@ The second is the cancellation-chain bug I noticed while running the sweeps: whe
 
 Both are blog-post-shaped on their own. For now, this one ships.
 
-
-## What's Next
-
-[Per-Tenant Concurrency Caps: Protecting Well-Behaved Tenants from a Bursty Neighbor](/posts/per-tenant-concurrency-caps.html) — what happens when more than one tenant shares the cluster, and how a static concurrency cap isolates them.

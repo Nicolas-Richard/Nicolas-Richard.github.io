@@ -153,6 +153,3 @@ The next thing I'd build is the layer that fixes both of those. A weighted-fair-
 ## Repo
 
 Terraform, Helm manifests, gateway code, the bench scenarios, and the Grafana dashboard JSON used for the screenshot above are in [the public repo](https://github.com/Nicolas-Richard/vllm-on-eks). The three runs in this post are reproducible end-to-end against a fresh cluster.
-## What's Next
-
-[Adaptive Concurrency on a Multi-Tenant vLLM Gateway: WFQ + AIMD Against a TTFT SLO](/posts/adaptive-concurrency-wfq-aimd-ttft-slo.html) — replacing static caps with weighted fair queueing and an AIMD controller that tunes the global budget continuously against a latency target.
