@@ -66,6 +66,12 @@ nav a:hover { color: #333; }
 .posts a { text-decoration: none; }
 .posts a:hover { text-decoration: underline; }
 
+.series-col {
+  min-width: 90px;
+  display: flex;
+  align-items: center;
+}
+
 .series-tag {
   font-size: 11px;
   color: #0969da;
@@ -73,7 +79,6 @@ nav a:hover { color: #333; }
   border-radius: 4px;
   padding: 1px 6px;
   white-space: nowrap;
-  margin-left: 8px;
 }
 
 /* Post page */

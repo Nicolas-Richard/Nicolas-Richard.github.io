@@ -119,8 +119,8 @@ def build():
     items = "\n".join(
         f'  <li>'
         f'<span class="date">{fmt_date(p["date"])}</span>'
+        f'<span class="series-col">{series_tag(p)}</span>'
         f'<a href="/posts/{p["slug"]}.html">{p["title"]}</a>'
-        f'{series_tag(p)}'
         f'</li>'
         for p in posts
     )
