@@ -6,7 +6,7 @@ series: "vLLM on EKS"
 
 # Per-tenant concurrency caps: protecting well-behaved tenants from a bursty neighbor
 
-*Third post in a series on running vLLM on EKS. The [first post](https://nicolas-richard.github.io/posts/streaming-llm-inference-on-eks.html) covered the build. The [second](https://nicolas-richard.github.io/posts/how-much-can-two-l4s-serve.html) covered capacity. This one covers the next thing that breaks once more than one tenant shares a cluster: a bursty tenant ruining latency for everyone else.*
+*Third post in a series on running vLLM on EKS. The [first post](https://nicolas-richard.github.io/posts/streaming-llm-inference-on-eks.html) covered the build. The [second](https://nicolas-richard.github.io/posts/how-much-can-two-nvidia-l4s-serve.html) covered capacity. This one covers the next thing that breaks once more than one tenant shares a cluster: a bursty tenant ruining latency for everyone else.*
 
 ## The setup
 
