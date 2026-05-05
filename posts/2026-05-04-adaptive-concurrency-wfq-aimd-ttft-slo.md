@@ -140,7 +140,7 @@ So the floor isn't an arbitrary safety belt — it's the boundary below which AI
 
 **The catch with tight queues: bursty arrivals.** `vllm bench serve --request-rate 4` produces a *mean* of 4 rps, not a steady 4 rps; small clusters of arrivals within a few hundred milliseconds are routine. With `queue_max=2`, those clusters trigger immediate 504s on arrival, *before* DRR has any chance to express the tenant's weight. A weight-2 paying tenant ended up shedding 21% of its requests purely from arrival-burst noise.
 
-The resolution was to differentiate `queue_max` by tier. Paying tenants get `queue_max=8` — enough to absorb arrival bursts without queue wait dominating TTFT. Free-tier tenants get `queue_max=2` — fast 504s, no buffering for the noisy neighbor.
+The fix was to split `queue_max` by tier. Paying tenants get `queue_max=8` — enough to absorb arrival bursts without queue wait dominating TTFT. Free-tier tenants get `queue_max=2` — fast 504s, no buffering for the noisy neighbor.
 
 ### 3. The demand gate must count in-flight, not just queued
 
@@ -148,13 +148,13 @@ The original AI gate fires when "any tenant has a non-empty queue" — TCP-style
 
 ### 4. Switching MD to a subtractive step (AISD)
 
-Even with the floor and tight queue, halving by 50% per MD event was cliff-shaped — cap went 64 → 32 → 16 in three ticks, with each tick observing the previous overcorrection rather than the current operating point. I replaced `cap //= 2` with `cap -= decrease_step` (default 4) and renamed the controller **AISD** — additive-increase / subtractive-decrease. Walking 64 → 60 → 56 gives each tick a chance to observe whether the smaller cap actually helped before the next reduction.
+Even with the floor and the tight queue, halving by 50% per MD event seemed excessive — cap went 64 → 32 → 16 in three ticks, and each tick was reacting to the last overcorrection rather than to the current state. I replaced `cap //= 2` with `cap -= decrease_step` (default 4) and renamed the controller **AISD** — additive-increase / subtractive-decrease. Walking 64 → 60 → 56 gives each tick a chance to observe whether the smaller cap actually helped before the next reduction.
 
 Honest take: the problem with halving was the *factor* (1/2), not multiplication itself — `0.8` or `0.9` would probably have worked. Subtractive doesn't scale with cap size (`decrease_step=4` is a 6% cut at cap=64 but 25% at cap=16), so MIMD is arguably the cleanest shape for a variable that spans an order of magnitude. I got confused, switched to subtractive, the system stabilized, and I moved on.
 
 ### 5. Limiting thrashing: deadband and asymmetric cooldown
 
-Even with a gentle descent, two more things were causing the controller to twitch unnecessarily near the operating point.
+Even with a gentle descent, two more things were causing the controller to thrash near the operating point.
 
 **Deadband around the target.** Without one, p99 jittering near the SLO (1.9 s, 2.1 s, 1.95 s) flipped AISD's direction every tick. Each flip is a real action — climb, descent, climb — and on the dashboard it looked like thrashing even when the system was honestly at its operating point. A deadband fixes this: AI fires only when p99 < target × 0.8, MD/AISD fires only when p99 > target × 1.2, and the band in between is a "no action" zone. Same reactivity to genuine overshoots, much less twitching at the operating point.
 
@@ -164,7 +164,7 @@ I deliberately did *not* apply the cooldown to AI. Forcing AI to wait would cap 
 
 ## Seeing it in action
 
-The headline panel from the top of the post (4-1) is the AISD-on noisy-neighbor run: two tenants under sustained pressure, AISD has parked the budget around 135 in-flight, p99 oscillates around the 2 s target with the controller actively defending it on each breach. To make the comparison clean I ran a sweep with AISD disabled across `cap_per_worker_initial ∈ {16, 32, 64, 128, 256}`, and a wider AISD-enabled sweep across `cap_per_worker_initial ∈ {4, 8, 16, 32, 64, 128, 256}`. Because each experiment is short, the choice of `cap_per_worker_initial` matters — different starting points produce meaningfully different behavior. I was looking for the sweet spot, and for this scenario without AISD it sits around 32.
+The headline panel from the top of the post (4-1) is the AISD-on noisy-neighbor run: two tenants under sustained pressure, AISD has parked the budget around 135 in-flight, p99 oscillates around the 2 s target with the controller actively defending it on each breach. To make the comparison clean I ran a sweep with AISD disabled across `cap_per_worker_initial ∈ {16, 32, 64, 128, 256}`, and a wider AISD-enabled sweep across `cap_per_worker_initial ∈ {4, 8, 16, 32, 64, 128, 256}`. The runs are short, so the choice of starting cap matters — different starting points behave very differently. I was looking for the sweet spot, and without AISD it sits around 32 for this scenario.
 
 **AISD off (DRR alone, static budget across the sweep):**
 
@@ -191,7 +191,7 @@ Finding this threshold is exactly what AIMD will excel at against an ever changi
 
 **Single-replica gateway.** All this scheduling state lives in the process — queues, semaphore, AISD window. If I ran two gateway replicas, I'd need shared state (Redis or similar) for the global budget, or I'd have two controllers doing uncoordinated AISD against the same backend. Out of scope for this demo; flagged for the v3 thinking pile.
 
-**vLLM's own batch is still opaque to the gateway.** AISD controls how many requests can be *outstanding to vLLM at once*; what vLLM does inside its batch is up to vLLM's continuous-batching scheduler. The gateway's view stops at "how saturated is the system overall, by latency?" That's enough for the SLO defense, but it's also why the controller is a reactive optimizer rather than a model-driven planner.
+**Scheduling is reactive not predictive.** AISD controls how many requests can be *outstanding to vLLM at once*; what vLLM does inside its batch is up to vLLM's continuous-batching scheduler. The gateway's view stops at "how saturated is the system overall, by latency?" That's enough for the SLO defense, but it's also why the controller is a reactive optimizer rather than a model-driven planner.
 
 ## The final config
 
@@ -219,7 +219,7 @@ tenants:
 
 ## What's next
 
-**Horizontal scaling on `num_workers`.** The natural extension of this controller story is letting the cluster add and remove GPU workers underneath the gateway, with HPA driven by an inference-meaningful signal — the controller's own action history (frequent decreases = under-provisioned), latency vs target, or KV cache pressure — rather than CPU utilization. Post #5 territory.
+**Horizontal scaling on `num_workers`.** The next thing to add is letting the cluster grow and shrink GPU workers under the gateway, with HPA driven by an inference-meaningful signal — the controller's own action history (frequent decreases = under-provisioned), latency vs target, or KV cache pressure — instead of CPU utilization. Post #5 territory.
 
 ## Repo
 
