@@ -1,6 +1,7 @@
 ---
 title: "Streaming LLM Inference on EKS, End to End"
 date: 2026-04-26
+series: "vLLM on EKS"
 ---
 
 Repo: [github.com/Nicolas-Richard/vllm-on-eks](https://github.com/Nicolas-Richard/vllm-on-eks)

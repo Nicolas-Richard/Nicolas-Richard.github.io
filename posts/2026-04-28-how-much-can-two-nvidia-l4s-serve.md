@@ -1,6 +1,7 @@
 ---
 title: "How Much Can Two Nvidia L4s Serve? It Depends on the Prompt."
 date: 2026-04-28
+series: "vLLM on EKS"
 ---
 
 # How much can two L4s serve? It depends on the prompt.

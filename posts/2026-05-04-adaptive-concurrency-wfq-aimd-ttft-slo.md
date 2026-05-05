@@ -1,6 +1,7 @@
 ---
 title: "Adaptive Concurrency on a Multi-Tenant vLLM Gateway: WFQ + AIMD Against a TTFT SLO"
 date: 2026-05-04
+series: "vLLM on EKS"
 ---
 
 # Adaptive concurrency on a multi-tenant vLLM gateway: WFQ + AIMD against a TTFT SLO

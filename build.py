@@ -61,6 +61,7 @@ def parse_post(path):
         "slug": slug,
         "title": meta.get("title", slug.replace("-", " ").title()),
         "date": date,
+        "series": meta.get("series"),
         "body": body.strip(),
     }
 
@@ -110,10 +111,16 @@ def build():
         (SITE_DIR / "posts" / f'{post["slug"]}.html').write_text(html)
 
     # Index
+    def series_tag(p):
+        if p["series"]:
+            return f'<span class="series-tag">{p["series"]}</span>'
+        return ""
+
     items = "\n".join(
         f'  <li>'
         f'<span class="date">{fmt_date(p["date"])}</span>'
         f'<a href="/posts/{p["slug"]}.html">{p["title"]}</a>'
+        f'{series_tag(p)}'
         f'</li>'
         for p in posts
     )

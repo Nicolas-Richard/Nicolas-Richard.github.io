@@ -1,6 +1,7 @@
 ---
 title: "Per-Tenant Concurrency Caps: Protecting Well-Behaved Tenants from a Bursty Neighbor"
 date: 2026-05-02
+series: "vLLM on EKS"
 ---
 
 # Per-tenant concurrency caps: protecting well-behaved tenants from a bursty neighbor

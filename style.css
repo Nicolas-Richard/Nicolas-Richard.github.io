@@ -66,6 +66,16 @@ nav a:hover { color: #333; }
 .posts a { text-decoration: none; }
 .posts a:hover { text-decoration: underline; }
 
+.series-tag {
+  font-size: 11px;
+  color: #0969da;
+  border: 1px solid #0969da;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
 /* Post page */
 article h1 { margin-bottom: 4px; }
 
