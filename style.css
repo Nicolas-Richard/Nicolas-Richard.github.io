@@ -70,6 +70,7 @@ nav a:hover { color: #333; }
   min-width: 90px;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .series-tag {
