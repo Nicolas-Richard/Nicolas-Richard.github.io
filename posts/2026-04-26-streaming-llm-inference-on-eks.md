@@ -253,3 +253,7 @@ The full stack is in `https://github.com/Nicolas-Richard/vllm-on-eks`. `make dep
 The follow-up post will cover benchmarking and a prefix-aware-routing demonstration on this same stack.
 
 The component decisions documented here — vLLM image pin, router routing logic, `httpx` async stream with `aiter_raw`, uvicorn over gunicorn, NLB over ALB — were each the non-default choice for the same reason: the default would have buffered the stream somewhere in the path.
+
+## What's Next
+
+[How Much Can Two Nvidia L4s Serve? It Depends on the Prompt.](/posts/how-much-can-two-nvidia-l4s-serve.html) — benchmarking the cluster with a concurrency sweep and understanding where the bottlenecks show up.
