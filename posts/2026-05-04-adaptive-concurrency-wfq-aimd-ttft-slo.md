@@ -152,6 +152,8 @@ Even with the floor and the tight queue, halving by 50% per MD event seemed exce
 
 Honest take: the problem with halving was the *factor* (1/2), not multiplication itself — `0.8` or `0.9` would probably have worked. Subtractive doesn't scale with cap size (`decrease_step=4` is a 6% cut at cap=64 but 25% at cap=16), so MIMD is arguably the cleanest shape for a variable that spans an order of magnitude. I got confused, switched to subtractive, the system stabilized, and I moved on.
 
+> **Update (post #5):** This turned out to be the wrong call. When building the autoscaler in post #5, I went back to validate the inner loop under sustained 20 rps and found the SLO wasn't being held cleanly — the real culprit was the queue acquire timeout sitting at **30 s**, fifteen times the 2 s SLO. A request that had already waited 30 s in queue was a lost cause; serving it fed a chain reaction rather than clearing pressure. Cutting the timeout to **1 s** fixed the death-spiral instinct that had made multiplicative decrease feel too aggressive in the first place. With that fixed, I switched back to **AIMD** — the classic sawtooth reacts faster to overshoots than a fixed subtractive step, and at the corrected timeout the overcorrection problem no longer appears. The AISD design in this post works, but it was stabilizing a symptom. See [post #5](https://nicolas-richard.github.io/posts/autoscaling-gpu-fleet.html) for the corrected controller.
+
 ### 5. Limiting thrashing: deadband and asymmetric cooldown
 
 Even with a gentle descent, two more things were causing the controller to thrash near the operating point.
