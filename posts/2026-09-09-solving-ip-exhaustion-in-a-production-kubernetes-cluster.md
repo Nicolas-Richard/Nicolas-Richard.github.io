@@ -12,13 +12,11 @@ Without free addresses, new pods, nodes and load balancers can't start. The syst
 
 To address this existential risk, we kicked off two workstreams. One focused on tuning what could be tuned: we ran fewer, larger pods, freeing roughly 6,000 addresses, and reduced the number of warm IPs nodes reserved. The other focused on adding a secondary CIDR and moving production workloads onto four new private subnets.
 
-![Meme: So anyway, I started adding subnets](/assets/i-started-adding-subnets.png)
-
 ## Why we were running out
 
 The VPC's `/16` had been divided across four availability zones, with one public and one private `/19` per zone. Those four private subnets provided roughly 32,000 usable addresses.
 
-That had once been generous, but over time the cluster grew from a few thousand pods to tens of thousands. Every pod receives a VPC-routable IP through the AWS VPC CNI, while databases, caches, load balancers, and nodes' warm-IP reserves consume addresses from the same finite space.
+That had once been generous, but over time the cluster grew from a few thousand pods to tens of thousands. Most pods receive a VPC-routable IP through the AWS VPC CNI, while databases, caches, load balancers, and nodes' warm-IP reserves consume addresses from the same finite space.
 
 The new CIDR doubled our private address capacity. Creating it and its subnets was just one pull request, but making the infrastructure trust the new addresses took a couple dozen.
 
@@ -36,13 +34,13 @@ AWS now assigns IDs to individual security-group rules and provides an API to mo
 
 Most use the legacy `aws_security_group_rule` resource, where changing `cidr_blocks` is a replacement operation. Terraform revokes the old rule and then authorizes its replacement. On a live database security group, this creates a real interruption window.
 
-Instead of replacing existing rules in place, I added separate rules covering a supernet that included both CIDRs. The old rule kept allowing traffic while Terraform created the new one. It changes the order from `destroy → create` to `create → destroy`.
+Instead of replacing existing rules in place, I added separate rules covering a supernet that included both CIDRs while leaving the original rules unchanged. The old rules kept allowing traffic during creation of the new ones. Once the new rules were active, the old ones could be removed in a separate step without opening a gap.
 
 ## Adding a subnet did not rotate any nodes
 
 Once the network paths were ready, I added the subnets to our Karpenter configuration and expected existing nodes to drift gradually onto them.
 
-Nothing happened. Existing nodes were still running in eligible subnets, so Karpenter had no reason to replace them. Karpenter only marks a node as drifted if its current subnet disappears from the eligible set. Karpenter's [drift reasons](https://deepwiki.com/aws/karpenter-provider-aws/5.1-installation-via-helm#drift-reasons) document this subnet-membership check.
+Nothing happened. Existing nodes were still running in eligible subnets, so Karpenter had no reason to replace them. Adding subnets doesn't cause subnet drift: a node becomes subnet-drifted only if its current subnet is no longer eligible. Karpenter's [subnet drift check](https://github.com/aws/karpenter-provider-aws/blob/main/pkg/cloudprovider/drift.go#L753-L780) performs this membership test.
 
 In non-production, I rotated the nodes manually. For production, I wanted more control...
 
@@ -63,9 +61,9 @@ I temporarily parked the fleet on a pool restricted to the original subnets. Wit
 
 Each service moved through its normal Argo Rollout. If a canary failed, that service would roll back automatically. No need to bet the entire cluster on one large node rotation.
 
-![IP allocations decline in the original subnets and increase in the new subnets until the traces converge during the rollout](/assets/IPs-moving-to-new-subnets.png)
+![Allocated-IP percentages decline in the original subnets and increase in the new subnets until the traces converge during the rollout](/assets/IPs-moving-to-new-subnets.png)
 
-*Allocations declined in the original subnets as they increased in the new ones, then converged once the fleet was distributed across both.*
+*The traces starting near zero show the new subnets filling as utilization fell in the original subnets. Each line shows the percentage of addresses allocated in a subnet.*
 
 ## The trust relationships I still missed
 
